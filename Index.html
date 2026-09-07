@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UbuzimaCard Athlete</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 56'%3E%3Crect x='6' y='10' width='52' height='38' rx='8' fill='none' stroke='%236d5a00' stroke-width='3'/%3E%3Cpath d='M10,30 L20,30 L24,18 L30,42 L34,22 L40,30 L54,30' fill='none' stroke='%236d5a00' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#f6f2e8;
+    --panel:#faf7ef;
+    --border:#d8d2c0;
+    --text:#22303c;
+    --muted:#5c6b76;
+    --accent:#41607a;
+    --accent-dark:#35526b;
+    --accent-soft:#41607a17;
+    --accent2:#e5be01;
+    --accent2-soft:#e5be012a;
+    --accent2-dark:#6d5a00;
+    --danger:#9c4a3a;
+    --danger-soft:#9c4a3a1f;
+    --success:#155943;
+    --success-soft:#1559431a;
+    --sbg:#1c2731;
+    --ssurface:#263543;
+    --stext:#f6f2e8;
+    --smuted:#a9b6bd;
+    --sborder:#3d5164;
+    --saccent:#7ea0b8;
+    --saccent-soft:#7ea0b826;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; padding:0;}
+  body{font-family:'Space Grotesk', system-ui, sans-serif; color:var(--text); background:var(--bg);}
+  h1,h2,h3{font-family:'Unbounded', sans-serif; margin:0; font-weight:600;}
+  a{color:var(--accent);} a:hover{color:var(--accent-dark);}
+  button{font-family:inherit; cursor:pointer;}
+  .mono-label{font-family:'IBM Plex Mono', monospace; text-transform:uppercase; letter-spacing:.12em;}
+  ::-webkit-scrollbar{width:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border); border-radius:6px;}
+
+  .app-shell{display:flex; width:100%; min-height:100vh; background:var(--bg);}
+  .sidebar{width:296px; flex-shrink:0; background:var(--sbg); border-right:1px solid var(--sborder); display:flex; flex-direction:column; padding:28px 22px; gap:24px; color:var(--stext);}
+  .main{flex:1; min-width:0; padding:40px 52px 60px; max-width:980px;}
+  .grid-2{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:20px;}
+  .grid-4{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px;}
+  .grid-4-16{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:16px;}
+
+  @media (max-width: 860px){
+    .app-shell{flex-direction:column;}
+    .sidebar{width:100%;}
+    .main{max-width:100%; padding:24px 20px 48px;}
+    .grid-2{grid-template-columns:1fr;}
+    .grid-4, .grid-4-16{grid-template-columns:repeat(2, minmax(0,1fr));}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const PLAYERS = {
+  rwandan: {
+    name: 'Uwimana Eric', team: 'RSSB Tigers', initials: 'UE',
+    position: 'Point guard', jersey: '#7', dob: '14 May 1998', nationality: 'Rwandan',
+    idLabel: 'NIDA-linked ID (RHIE pilot)', idValue: '1 1990 8 0123456 78',
+    idNote: 'Identity resolved via the RHIE–NIDA link — this pilot tests reliability of that connection.'
+  },
+  foreign: {
+    name: 'Marcus Reed', team: 'RSSB Tigers', initials: 'MR',
+    position: 'Center', jersey: '#21', dob: '2 Nov 1996', nationality: 'American',
+    idLabel: 'Passport-linked ID', idValue: 'Passport No. US048213X',
+    idNote: 'Foreign players are anchored to passport + team registration number, cross-referenced to FIBA transfer paperwork.'
+  }
+};
+
+const TRANSFER_CLUBS = ['Patriots BBC', 'APR BBC', 'REG BBC'];
+
+const PERSONAL_HISTORY = [
+  'Chest pain or discomfort with exertion',
+  'Unexplained fainting or near-fainting',
+  'Excessive breathlessness or fatigue with exercise',
+  'Known heart murmur',
+  'History of elevated blood pressure',
+  'Previous restriction from sports participation',
+  'Prior cardiac testing ordered'
+];
+const FAMILY_HISTORY = [
+  'Premature cardiac-related death in a family member (before age 50)',
+  'Family member disabled by heart disease',
+  'Family history of cardiomyopathy, long-QT syndrome, or other inherited arrhythmia condition'
+];
+const EXAM_ITEMS = [
+  'Heart murmur on auscultation',
+  'Femoral pulses assessed (aortic coarctation)',
+  'Physical signs consistent with Marfan syndrome',
+  'Brachial artery blood pressure recorded'
+];
+const RED_FLAGS = [
+  'Neck pain or tenderness',
+  'Loss of consciousness',
+  'Increasing or severe headache',
+  'Repeated vomiting',
+  'Seizure or convulsion',
+  'Increasing confusion or agitation'
+];
+const RTP_STAGES = ['Symptom-limited activity','Light aerobic exercise','Sport-specific exercise','Non-contact training drills','Full-contact practice','Return to sport'];
+
+const PHQ9_QUESTIONS = [
+  'Little interest or pleasure in doing things',
+  'Feeling down, depressed, or hopeless',
+  'Trouble falling or staying asleep, or sleeping too much',
+  'Feeling tired or having little energy',
+  'Poor appetite or overeating',
+  'Feeling bad about yourself — or that you are a failure or have let the team down',
+  'Trouble concentrating on training or match preparation',
+  'Moving or speaking noticeably slowly, or being unusually fidgety/restless',
+  'Thoughts that you would be better off dead, or of hurting yourself in some way'
+];
+const PHQ9_LABELS = ['Not at all','Several days','More than half','Nearly every day'];
+
+const PSQI_COMPONENTS = ['Subjective sleep quality','Sleep latency (time to fall asleep)','Sleep duration','Habitual sleep efficiency','Sleep disturbances','Use of sleep medication','Daytime dysfunction'];
+const PSQI_LABELS = ['No difficulty','Mild','Moderate','Severe'];
+
+const CONSENT_LABELS = ['Club medical staff','National federation','Insurer','Receiving club (on transfer)'];
+
+const CARE_FACILITIES = [
+  { id: 'cardiac', category: 'Cardiac', color: 'var(--accent)', name: 'Sample Cardiology Referral Center', service: 'Cardiac clearance follow-up & specialist review', location: 'Kigali', contact: '+250 7•• ••• ••• (sample)' },
+  { id: 'physio1', category: 'Orthopedic & physiotherapy', color: 'var(--accent2-dark)', name: 'Sample Sports Medicine & Physiotherapy Clinic', service: 'Injury rehab & return-to-play supervision', location: 'Kigali', contact: '+250 7•• ••• ••• (sample)' },
+  { id: 'physio2', category: 'Orthopedic & physiotherapy', color: 'var(--accent2-dark)', name: 'Sample Physiotherapy Practice', service: 'Ongoing physical therapy sessions', location: 'Kigali', contact: '+250 7•• ••• ••• (sample)' },
+  { id: 'mental', category: 'Mental health & counseling', color: 'var(--success)', name: 'Sample Mental Health & Counseling Service', service: 'Confidential counseling & follow-up support', location: 'Kigali', contact: '+250 7•• ••• ••• (sample)' }
+];
+
+let state = {
+  playerType: 'rwandan',
+  role: 'clinician',
+  clinicianTab: 'cardiac',
+  athleteTab: 'care',
+  careRequests: {},
+  cardiacPersonal: {}, cardiacFamily: {}, cardiacExam: {},
+  clearance: null,
+  redFlags: {},
+  symptomCount: 0, memoryScore: 30, recallScore: 10, balanceErrors: 0,
+  rtpStage: 0,
+  phq9: Array(9).fill(null),
+  psqi: Array(7).fill(null),
+  checkinDone: false,
+  consent: { 0: true, 1: true, 2: false, 3: false },
+  transferClub: null,
+  transferSent: false
+};
+
+function setState(patch) {
+  state = { ...state, ...patch };
+  render();
+}
+
+function toggleSet(key, id) {
+  const set = { ...state[key] };
+  set[id] = !set[id];
+  setState({ [key]: set });
+}
+
+function scaleOptions(stateKey, idx, labels) {
+  const current = state[stateKey][idx];
+  return labels.map((label, val) => ({
+    label,
+    border: current === val ? 'var(--success)' : 'var(--border)',
+    bg: current === val ? 'var(--success)' : '#fff',
+    color: current === val ? '#fff' : 'var(--text)',
+    pick: () => {
+      const arr = [...state[stateKey]];
+      arr[idx] = val;
+      setState({ [stateKey]: arr });
+    }
+  }));
+}
+
+let H = {}, hid = 0;
+function reg(fn) { const id = 'h' + (hid++); H[id] = fn; return id; }
+
+function checkSvg() {
+  return '<svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4.5L4 7.5L10 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function checklistHTML(items) {
+  return items.map((item) => `
+    <button data-h="${reg(item.toggle)}" style="display:flex; align-items:center; gap:10px; text-align:left; background:none; border:none; padding:9px 4px; border-radius:8px; width:100%;">
+      <span style="width:18px; height:18px; border-radius:5px; border:1.5px solid ${item.boxBorder}; background:${item.boxBg}; flex-shrink:0; display:flex; align-items:center; justify-content:center;">
+        ${item.checked ? checkSvg() : ''}
+      </span>
+      <span style="font-size:13.5px; line-height:1.35;">${item.label}</span>
+    </button>
+  `).join('');
+}
+
+function computeVals() {
+  const s = state;
+  const player = PLAYERS[s.playerType];
+
+  const checklistItems = (labels, key, color) => labels.map((label, i) => ({
+    label, checked: !!s[key][i],
+    boxBorder: s[key][i] ? (color || 'var(--accent)') : 'var(--border)',
+    boxBg: s[key][i] ? (color || 'var(--accent)') : '#fff',
+    toggle: () => toggleSet(key, i)
+  }));
+
+  const clearanceOptions = ['Cleared', 'Referred', 'Restricted'].map((label) => ({
+    label,
+    border: s.clearance === label ? 'var(--accent)' : 'var(--border)',
+    bg: s.clearance === label ? 'var(--accent-soft)' : '#fff',
+    color: s.clearance === label ? 'var(--accent-dark)' : 'var(--text)',
+    pick: () => setState({ clearance: label })
+  }));
+
+  const rtpStages = RTP_STAGES.map((label, i) => ({
+    num: i + 1, label,
+    border: s.rtpStage === i ? 'var(--accent2-dark)' : 'var(--border)',
+    bg: s.rtpStage === i ? 'var(--accent2)' : '#fff',
+    color: s.rtpStage === i ? 'var(--accent2-dark)' : 'var(--text)',
+    pick: () => setState({ rtpStage: i })
+  }));
+
+  const phq9Items = PHQ9_QUESTIONS.map((text, i) => ({ text, options: scaleOptions('phq9', i, PHQ9_LABELS) }));
+  const psqiItems = PSQI_COMPONENTS.map((name, i) => ({ name, options: scaleOptions('psqi', i, PSQI_LABELS) }));
+
+  const phq9Answered = s.phq9.filter((v) => v !== null).length;
+  const phq9Total = s.phq9.reduce((a, v) => a + (v || 0), 0);
+  let phq9Band = '';
+  if (phq9Answered === 9) {
+    phq9Band = phq9Total <= 4 ? 'minimal' : phq9Total <= 9 ? 'mild' : phq9Total <= 14 ? 'moderate' : phq9Total <= 19 ? 'moderately severe' : 'severe';
+  }
+  const phq9ScoreLine = phq9Answered < 9 ? `${phq9Answered} of 9 answered` : `Score ${phq9Total}/27 — ${phq9Band}`;
+
+  const psqiAnswered = s.psqi.filter((v) => v !== null).length;
+  const psqiTotal = s.psqi.reduce((a, v) => a + (v || 0), 0);
+  const psqiScoreLine = psqiAnswered < 7 ? `${psqiAnswered} of 7 answered` : `Global score ${psqiTotal}/21 — ${psqiTotal > 5 ? 'poor sleep quality' : 'good sleep quality'}`;
+
+  const consentItems = CONSENT_LABELS.map((label, i) => ({
+    label,
+    trackBg: s.consent[i] ? 'var(--success)' : 'var(--border)',
+    knobLeft: s.consent[i] ? '20px' : '2px',
+    toggle: () => setState({ consent: { ...s.consent, [i]: !s.consent[i] } })
+  }));
+
+  const clearanceBadge = s.clearance === 'Cleared'
+    ? { bg: 'var(--success-soft)', color: 'var(--success)', label: 'Cleared' }
+    : s.clearance === 'Referred'
+    ? { bg: 'var(--danger-soft)', color: 'var(--danger)', label: 'Referred' }
+    : s.clearance === 'Restricted'
+    ? { bg: 'var(--accent2-soft)', color: 'var(--accent2-dark)', label: 'Restricted' }
+    : { bg: 'var(--bg)', color: 'var(--muted)', label: 'Pending screening' };
+
+  const btnStyle = (active) => `flex-shrink:0; font-size:10.5px; font-weight:600; padding:6px 8px; border-radius:7px; border:1.5px solid ${active ? 'var(--accent2)' : 'var(--sborder)'}; background:${active ? 'var(--accent2-soft)' : 'transparent'}; color:${active ? 'var(--accent2)' : 'var(--smuted)'};`;
+  const navBtn = (active, tabColor) => `text-align:left; padding:10px 12px; border:none; border-radius:9px; font-size:13.5px; font-weight:600; background:${active ? tabColor + '26' : 'transparent'}; color:${active ? tabColor : 'var(--stext)'};`;
+  const roleBtn = (active) => `background:${active ? 'var(--ssurface)' : 'transparent'}; box-shadow:${active ? '0 1px 3px rgba(0,0,0,0.3)' : 'none'}; color:${active ? 'var(--stext)' : 'var(--smuted)'};`;
+
+  return {
+    isClinician: s.role === 'clinician',
+    isAthlete: s.role === 'athlete',
+    setClinician: () => setState({ role: 'clinician' }),
+    setAthlete: () => setState({ role: 'athlete' }),
+    clinicianRoleBtnStyle: roleBtn(s.role === 'clinician'),
+    athleteRoleBtnStyle: roleBtn(s.role === 'athlete'),
+
+    showCardiac: s.role === 'clinician' && s.clinicianTab === 'cardiac',
+    showInjury: s.role === 'clinician' && s.clinicianTab === 'injury',
+    setTabCardiac: () => setState({ clinicianTab: 'cardiac' }),
+    setTabInjury: () => setState({ clinicianTab: 'injury' }),
+    cardiacTabStyle: navBtn(s.clinicianTab === 'cardiac', '#7ea0b8'),
+    injuryTabStyle: navBtn(s.clinicianTab === 'injury', '#f2cf4a'),
+
+    showCare: s.role === 'athlete' && s.athleteTab === 'care',
+    showProfile: s.role === 'athlete' && s.athleteTab === 'profile',
+    showCheckin: s.role === 'athlete' && s.athleteTab === 'checkin',
+    setTabCare: () => setState({ athleteTab: 'care' }),
+    setTabProfile: () => setState({ athleteTab: 'profile' }),
+    setTabCheckin: () => setState({ athleteTab: 'checkin' }),
+    careTabStyle: navBtn(s.athleteTab === 'care', '#3a9376'),
+    profileTabStyle: navBtn(s.athleteTab === 'profile', '#3a9376'),
+    checkinTabStyle: navBtn(s.athleteTab === 'checkin', '#3a9376'),
+
+    playerName: player.name, playerTeam: player.team, initials: player.initials,
+    position: player.position, jersey: player.jersey, dob: player.dob, nationality: player.nationality,
+    idLabel: player.idLabel, idValue: player.idValue, idNote: player.idNote,
+    setRwandan: () => setState({ playerType: 'rwandan' }),
+    setForeign: () => setState({ playerType: 'foreign' }),
+    rwandanBtnStyle: btnStyle(s.playerType === 'rwandan'),
+    foreignBtnStyle: btnStyle(s.playerType === 'foreign'),
+
+    personalHistoryItems: checklistItems(PERSONAL_HISTORY, 'cardiacPersonal'),
+    familyHistoryItems: checklistItems(FAMILY_HISTORY, 'cardiacFamily'),
+    examItems: checklistItems(EXAM_ITEMS, 'cardiacExam'),
+    clearanceOptions,
+    clinicianName: 'Dr. sample, team physician', screeningDate: '7 Sept 2026',
+
+    injuryHistory: [
+      { title: 'Grade 1 right ankle sprain', date: '14 Mar 2026', club: 'RSSB Tigers', status: 'Cleared', badgeBg: 'var(--success-soft)', badgeColor: 'var(--success)' },
+      { title: 'Concussion — sideline assessment', date: '2 Aug 2026', club: 'RSSB Tigers', status: 'RTP in progress', badgeBg: 'var(--accent2-soft)', badgeColor: 'var(--accent2-dark)' }
+    ],
+    redFlagItems: checklistItems(RED_FLAGS, 'redFlags', 'var(--accent2-dark)'),
+    symptomCount: s.symptomCount,
+    symptomInc: () => setState({ symptomCount: Math.min(22, s.symptomCount + 1) }),
+    symptomDec: () => setState({ symptomCount: Math.max(0, s.symptomCount - 1) }),
+    memoryScore: s.memoryScore,
+    memoryInc: () => setState({ memoryScore: Math.min(30, s.memoryScore + 1) }),
+    memoryDec: () => setState({ memoryScore: Math.max(0, s.memoryScore - 1) }),
+    recallScore: s.recallScore,
+    recallInc: () => setState({ recallScore: Math.min(10, s.recallScore + 1) }),
+    recallDec: () => setState({ recallScore: Math.max(0, s.recallScore - 1) }),
+    balanceErrors: s.balanceErrors,
+    balanceInc: () => setState({ balanceErrors: Math.min(30, s.balanceErrors + 1) }),
+    balanceDec: () => setState({ balanceErrors: Math.max(0, s.balanceErrors - 1) }),
+    rtpStages,
+
+    cardiacBadgeBg: clearanceBadge.bg, cardiacBadgeColor: clearanceBadge.color, cardiacBadgeLabel: clearanceBadge.label,
+    athleteRtpLabel: `${s.rtpStage + 1}. ${RTP_STAGES[s.rtpStage]}`,
+
+    phq9Items, phq9ScoreLine,
+    psqiItems, psqiScoreLine,
+    submitCheckin: () => setState({ checkinDone: true }),
+    checkinDone: s.checkinDone,
+    consentItems,
+
+    transferClubs: TRANSFER_CLUBS.map((label) => ({
+      label,
+      border: s.transferClub === label ? 'var(--accent2-dark)' : 'var(--border)',
+      bg: s.transferClub === label ? 'var(--accent2-soft)' : '#fff',
+      color: s.transferClub === label ? 'var(--accent2-dark)' : 'var(--text)',
+      pick: () => setState({ transferClub: label, transferSent: false })
+    })),
+    sendTransfer: () => setState({ transferSent: true, consent: { ...s.consent, 3: true } }),
+    transferSent: s.transferSent,
+    transferClub: s.transferClub,
+
+    careItems: CARE_FACILITIES.map((f) => {
+      const requested = !!s.careRequests[f.id];
+      return {
+        ...f,
+        reqLabel: requested ? '✓ Requested' : 'Request an introduction',
+        reqBorder: requested ? 'var(--success)' : 'var(--border)',
+        reqBg: requested ? 'var(--success-soft)' : '#fff',
+        reqColor: requested ? 'var(--success)' : 'var(--text)',
+        request: () => setState({ careRequests: { ...s.careRequests, [f.id]: true } })
+      };
+    })
+  };
+}
+
+function sidebarHTML(v) {
+  return `
+    <div class="sidebar">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <svg width="34" height="30" viewBox="0 0 64 56" fill="none" style="flex-shrink:0;">
+          <rect x="6" y="10" width="52" height="38" rx="8" stroke="var(--accent2)" stroke-width="3"/>
+          <path d="M10,30 L20,30 L24,18 L30,42 L34,22 L40,30 L54,30" stroke="var(--accent2)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M22,44 Q32,50 42,44" stroke="var(--saccent)" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        </svg>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <div style="font-family:'Unbounded',sans-serif; font-weight:700; font-size:17px; letter-spacing:-0.01em; line-height:1.15; color:var(--stext);">UbuzimaCard<br/><span style="font-weight:500; font-size:13px; color:var(--smuted);">Athlete</span></div>
+        </div>
+      </div>
+
+      <div style="background:var(--ssurface); border:1px solid var(--sborder); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:40px; height:40px; border-radius:50%; background:var(--saccent-soft); color:var(--saccent); display:flex; align-items:center; justify-content:center; font-weight:600; font-size:14px; flex-shrink:0;">${v.initials}</div>
+          <div style="min-width:0;">
+            <div style="font-weight:600; font-size:14px; color:var(--stext); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${v.playerName}</div>
+            <div style="font-size:12px; color:var(--smuted);">${v.playerTeam}</div>
+          </div>
+        </div>
+        <div style="height:1px; background:var(--sborder);"></div>
+        <div class="mono-label" style="font-size:10px; color:var(--smuted);">${v.idLabel}</div>
+        <div class="mono-label" style="font-size:13px; letter-spacing:.02em; color:var(--stext); background:var(--sbg); border:1px solid var(--sborder); border-radius:8px; padding:6px 8px; text-transform:none;">${v.idValue}</div>
+        <div style="font-size:11.5px; color:var(--smuted); line-height:1.4;">${v.idNote}</div>
+        <div style="display:flex; gap:6px; margin-top:2px;">
+          <button data-h="${reg(v.setRwandan)}" style="${v.rwandanBtnStyle}">Rwandan (NIDA)</button>
+          <button data-h="${reg(v.setForeign)}" style="${v.foreignBtnStyle}">Foreign (passport)</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="mono-label" style="font-size:10px; color:var(--smuted); margin-bottom:8px;">Viewing as</div>
+        <div style="display:flex; background:var(--sbg); border:1px solid var(--sborder); border-radius:10px; padding:3px; gap:3px;">
+          <button data-h="${reg(v.setClinician)}" style="${v.clinicianRoleBtnStyle} flex:1; padding:8px 0; border:none; border-radius:8px; font-size:13px; font-weight:600;">Clinician</button>
+          <button data-h="${reg(v.setAthlete)}" style="${v.athleteRoleBtnStyle} flex:1; padding:8px 0; border:none; border-radius:8px; font-size:13px; font-weight:600;">Athlete</button>
+        </div>
+      </div>
+
+      ${v.isClinician ? `
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <button data-h="${reg(v.setTabCardiac)}" style="${v.cardiacTabStyle}">Cardiac screening</button>
+        <button data-h="${reg(v.setTabInjury)}" style="${v.injuryTabStyle}">Injury &amp; concussion</button>
+      </div>` : ''}
+
+      ${v.isAthlete ? `
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <button data-h="${reg(v.setTabCare)}" style="${v.careTabStyle}">Care network</button>
+        <button data-h="${reg(v.setTabProfile)}" style="${v.profileTabStyle}">My profile</button>
+        <button data-h="${reg(v.setTabCheckin)}" style="${v.checkinTabStyle}">Recovery check-in</button>
+      </div>` : ''}
+
+      <div style="margin-top:auto; font-size:11.5px; color:var(--smuted); line-height:1.5; border-top:1px solid var(--sborder); padding-top:14px;">
+        Working prototype — sample player data. Records live in e-Ubuzima; this view is the access &amp; consent layer only.
+      </div>
+    </div>
+  `;
+}
+
+function cardiacHTML(v) {
+  return `
+    <h1 style="font-size:24px;">Cardiac pre-participation screening</h1>
+    <div style="width:44px; height:4px; background:var(--accent); border-radius:2px; margin-top:12px;"></div>
+    <p style="color:var(--muted); font-size:14px; margin-top:14px;">Administered by clinical staff during intake &middot; structured on the AHA 14-point evaluation</p>
+
+    <div class="grid-2" style="margin-top:24px;">
+      <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:20px;">
+        <h3 style="font-size:14px; margin-bottom:14px;">Personal history</h3>
+        <div style="display:flex; flex-direction:column; gap:2px;">${checklistHTML(v.personalHistoryItems)}</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:20px;">
+        <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:20px;">
+          <h3 style="font-size:14px; margin-bottom:14px;">Family history</h3>
+          <div style="display:flex; flex-direction:column; gap:2px;">${checklistHTML(v.familyHistoryItems)}</div>
+        </div>
+        <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:20px;">
+          <h3 style="font-size:14px; margin-bottom:14px;">Physical exam</h3>
+          <div style="display:flex; flex-direction:column; gap:2px;">${checklistHTML(v.examItems)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--accent); border-radius:14px; padding:20px; margin-top:20px; display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:13px; color:var(--muted);">Clearance decision</div>
+        <div style="font-size:12.5px; color:var(--muted); margin-top:2px;">Examining clinician: ${v.clinicianName} &middot; ${v.screeningDate}</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        ${v.clearanceOptions.map((opt) => `<button data-h="${reg(opt.pick)}" style="padding:9px 16px; border-radius:9px; font-size:13px; font-weight:600; border:1.5px solid ${opt.border}; background:${opt.bg}; color:${opt.color};">${opt.label}</button>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function injuryHTML(v) {
+  return `
+    <h1 style="font-size:24px;">Injury &amp; concussion ledger</h1>
+    <div style="width:44px; height:4px; background:var(--accent2); border-radius:2px; margin-top:12px;"></div>
+    <p style="color:var(--muted); font-size:14px; margin-top:14px;">Assessment structure follows SCAT6 &middot; return-to-play tracked in graduated stages</p>
+
+    <h3 class="mono-label" style="font-family:'IBM Plex Mono',monospace; font-weight:400; font-size:11px; color:var(--muted); margin-top:26px; margin-bottom:10px;">Player history (portable across clubs)</h3>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      ${v.injuryHistory.map((ev) => `
+        <div style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div>
+            <div style="font-size:13.5px; font-weight:600;">${ev.title}</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">${ev.date} &middot; ${ev.club}</div>
+          </div>
+          <span style="font-size:12px; font-weight:600; padding:5px 11px; border-radius:20px; background:${ev.badgeBg}; color:${ev.badgeColor};">${ev.status}</span>
+        </div>
+      `).join('')}
+    </div>
+
+    <h3 class="mono-label" style="font-family:'IBM Plex Mono',monospace; font-weight:400; font-size:11px; color:var(--muted); margin-top:28px; margin-bottom:10px;">New assessment</h3>
+    <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--accent2); border-radius:14px; padding:20px;">
+      <div style="font-size:13px; font-weight:600; margin-bottom:10px;">Red flags observed</div>
+      <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:2px; margin-bottom:20px;">
+        ${checklistHTML(v.redFlagItems)}
+      </div>
+
+      <div class="grid-4" style="padding-top:16px; border-top:1px solid var(--border);">
+        <div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Symptoms reported</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button data-h="${reg(v.symptomDec)}" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--border); background:var(--bg); font-size:15px;">–</button>
+            <span style="font-size:16px; font-weight:600; min-width:18px; text-align:center;">${v.symptomCount}</span>
+            <button data-h="${reg(v.symptomInc)}" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--border); background:var(--bg); font-size:15px;">+</button>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Immediate memory /30</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button data-h="${reg(v.memoryDec)}" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--border); background:var(--bg); font-size:15px;">–</button>
+            <span style="font-size:16px; font-weight:600; min-width:18px; text-align:center;">${v.memoryScore}</span>
+            <button data-h="${reg(v.memoryInc)}" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--border); background:var(--bg); font-size:15px;">+</button>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Delayed recall /10</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button data-h="${reg(v.recallDec)}" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--border); background:var(--bg); font-size:15px;">–</button>
+            <span style="font-size:16px; font-weight:600; min-width:18px; text-align:center;">${v.recallScore}</span>
+            <button data-h="${reg(v.recallInc)}" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--border); background:var(--bg); font-size:15px;">+</button>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Balance errors (mBESS)</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button data-h="${reg(v.balanceDec)}" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--border); background:var(--bg); font-size:15px;">–</button>
+            <span style="font-size:16px; font-weight:600; min-width:18px; text-align:center;">${v.balanceErrors}</span>
+            <button data-h="${reg(v.balanceInc)}" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--border); background:var(--bg); font-size:15px;">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:22px; padding-top:18px; border-top:1px solid var(--border);">
+        <div style="font-size:13px; font-weight:600; margin-bottom:10px;">Return-to-play stage</div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          ${v.rtpStages.map((stage) => `<button data-h="${reg(stage.pick)}" style="padding:8px 12px; border-radius:9px; font-size:12.5px; font-weight:600; border:1.5px solid ${stage.border}; background:${stage.bg}; color:${stage.color};">${stage.num}. ${stage.label}</button>`).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function careHTML(v) {
+  return `
+    <h1 style="font-size:24px;">Care network</h1>
+    <div style="width:44px; height:4px; background:var(--success); border-radius:2px; margin-top:12px;"></div>
+    <p style="color:var(--muted); font-size:14px; margin-top:14px;">Facilities your club has vetted &middot; request an introduction and your medical staff coordinates the referral</p>
+
+    <div style="display:flex; flex-direction:column; gap:14px; margin-top:22px;">
+      ${v.careItems.map((f) => `
+        <div style="background:#fff; border:1px solid var(--border); border-left:4px solid ${f.color}; border-radius:14px; padding:18px 20px; display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;">
+          <div style="min-width:0;">
+            <div class="mono-label" style="font-size:10px; color:${f.color}; margin-bottom:5px;">${f.category}</div>
+            <div style="font-size:14.5px; font-weight:600;">${f.name}</div>
+            <div style="font-size:13px; color:var(--muted); margin-top:3px;">${f.service}</div>
+            <div style="font-size:12.5px; color:var(--muted); margin-top:5px;">${f.location} &middot; ${f.contact}</div>
+          </div>
+          <div style="flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+            <span class="mono-label" style="font-size:9.5px; color:var(--success); background:var(--success-soft); padding:4px 8px; border-radius:20px;">Team partner</span>
+            <button data-h="${reg(f.request)}" style="padding:8px 14px; border-radius:9px; font-size:12.5px; font-weight:600; border:1.5px solid ${f.reqBorder}; background:${f.reqBg}; color:${f.reqColor}; white-space:nowrap;">${f.reqLabel}</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <p style="color:var(--muted); font-size:12.5px; margin-top:20px; line-height:1.5;">Sample partner facilities shown for demonstration — each club curates and approves its own list. Facilities interested in joining a club's care network go through a separate verification process.</p>
+  `;
+}
+
+function profileHTML(v) {
+  return `
+    <h1 style="font-size:24px;">My profile</h1>
+    <div style="width:44px; height:4px; background:var(--success); border-radius:2px; margin-top:12px;"></div>
+    <p style="color:var(--muted); font-size:14px; margin-top:14px;">Stored for you only — this is what follows you if you move to a new club</p>
+
+    <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--success); border-radius:14px; padding:20px; margin-top:22px;">
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
+        <div style="width:52px; height:52px; border-radius:50%; background:var(--success-soft); color:var(--success); display:flex; align-items:center; justify-content:center; font-weight:600; font-size:17px; flex-shrink:0;">${v.initials}</div>
+        <div>
+          <div style="font-weight:600; font-size:16px;">${v.playerName}</div>
+          <div style="font-size:13px; color:var(--muted);">${v.playerTeam} &middot; ${v.position} &middot; ${v.jersey}</div>
+        </div>
+      </div>
+      <div class="grid-4-16" style="padding-top:16px; border-top:1px solid var(--border);">
+        <div><div class="mono-label" style="font-size:10px; color:var(--muted); margin-bottom:4px;">Date of birth</div><div style="font-size:13.5px;">${v.dob}</div></div>
+        <div><div class="mono-label" style="font-size:10px; color:var(--muted); margin-bottom:4px;">Nationality</div><div style="font-size:13.5px;">${v.nationality}</div></div>
+        <div><div class="mono-label" style="font-size:10px; color:var(--muted); margin-bottom:4px;">${v.idLabel}</div><div class="mono-label" style="font-size:12px; text-transform:none;">${v.idValue}</div></div>
+        <div><div class="mono-label" style="font-size:10px; color:var(--muted); margin-bottom:4px;">Current club</div><div style="font-size:13.5px;">${v.playerTeam}</div></div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px;">
+      <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--accent); border-radius:14px; padding:18px;">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Cardiac clearance</div>
+        <span style="font-size:13px; font-weight:600; padding:5px 11px; border-radius:20px; background:${v.cardiacBadgeBg}; color:${v.cardiacBadgeColor};">${v.cardiacBadgeLabel}</span>
+      </div>
+      <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--accent2); border-radius:14px; padding:18px;">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Return-to-play stage</div>
+        <span style="font-size:13px; font-weight:600; padding:5px 11px; border-radius:20px; background:var(--accent2-soft); color:var(--accent2-dark);">${v.athleteRtpLabel}</span>
+      </div>
+    </div>
+
+    <h3 class="mono-label" style="font-family:'IBM Plex Mono',monospace; font-weight:400; font-size:11px; color:var(--muted); margin-top:26px; margin-bottom:10px;">Injury &amp; concussion history</h3>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      ${v.injuryHistory.map((ev) => `
+        <div style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div>
+            <div style="font-size:13.5px; font-weight:600;">${ev.title}</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">${ev.date} &middot; ${ev.club}</div>
+          </div>
+          <span style="font-size:12px; font-weight:600; padding:5px 11px; border-radius:20px; background:${ev.badgeBg}; color:${ev.badgeColor};">${ev.status}</span>
+        </div>
+      `).join('')}
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--success); border-radius:16px; padding:24px; margin-top:22px;">
+      <h2 style="font-size:17px;">Who can see your data</h2>
+      <p style="color:var(--muted); font-size:13px; margin-top:4px;">You control access individually — nothing is shared by default beyond your club's medical staff</p>
+      <div style="display:flex; flex-direction:column; margin-top:16px;">
+        ${v.consentItems.map((c) => `
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border);">
+            <span style="font-size:13.5px;">${c.label}</span>
+            <button data-h="${reg(c.toggle)}" style="width:42px; height:24px; border-radius:20px; border:none; background:${c.trackBg}; position:relative; padding:0;">
+              <span style="position:absolute; top:2px; left:${c.knobLeft}; width:20px; height:20px; border-radius:50%; background:white; box-shadow:0 1px 2px rgba(0,0,0,0.25); transition:left .15s;"></span>
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--accent2); border-radius:16px; padding:24px; margin-top:20px;">
+      <h2 style="font-size:17px;">Transfer to a new club</h2>
+      <p style="color:var(--muted); font-size:13px; margin-top:4px;">Moving clubs? Select where you're headed — this sends your full record, and switches on their access above.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
+        ${v.transferClubs.map((club) => `<button data-h="${reg(club.pick)}" style="padding:9px 16px; border-radius:9px; font-size:13px; font-weight:600; border:1.5px solid ${club.border}; background:${club.bg}; color:${club.color};">${club.label}</button>`).join('')}
+      </div>
+      <div style="margin-top:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <button data-h="${reg(v.sendTransfer)}" style="background:var(--accent2-dark); color:white; border:none; padding:11px 20px; border-radius:10px; font-size:13.5px; font-weight:600;">Send transfer package</button>
+        ${v.transferSent ? `<span style="font-size:13px; color:var(--success); font-weight:600;">✓ Sent to ${v.transferClub} — they now have access to this profile</span>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function checkinHTML(v) {
+  return `
+    <h1 style="font-size:24px;">Recovery check-in</h1>
+    <div style="width:44px; height:4px; background:var(--success); border-radius:2px; margin-top:12px;"></div>
+    <p style="color:var(--muted); font-size:14px; margin-top:14px;">Two short sets of questions &middot; about 2 minutes &middot; only you choose who sees the results</p>
+
+    <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--success); border-radius:16px; padding:24px; margin-top:22px;">
+      <div style="font-size:13px; font-weight:600;">Over the last two weeks</div>
+      <div style="display:flex; flex-direction:column; gap:14px; margin-top:10px;">
+        ${v.phq9Items.map((q) => `
+          <div style="padding-bottom:14px; border-bottom:1px solid var(--border);">
+            <div style="font-size:13.5px; margin-bottom:8px; line-height:1.4;">${q.text}</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              ${q.options.map((opt) => `<button data-h="${reg(opt.pick)}" style="padding:7px 11px; border-radius:8px; font-size:12px; font-weight:500; border:1.5px solid ${opt.border}; background:${opt.bg}; color:${opt.color};">${opt.label}</button>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:13px; color:var(--muted); margin-top:6px;">${v.phq9ScoreLine}</div>
+
+      <div style="margin-top:26px; font-size:13px; font-weight:600;">Sleep quality (PSQI components)</div>
+      <div style="display:flex; flex-direction:column; gap:14px; margin-top:10px;">
+        ${v.psqiItems.map((comp) => `
+          <div style="padding-bottom:14px; border-bottom:1px solid var(--border);">
+            <div style="font-size:13.5px; margin-bottom:8px;">${comp.name}</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              ${comp.options.map((opt) => `<button data-h="${reg(opt.pick)}" style="padding:7px 11px; border-radius:8px; font-size:12px; font-weight:500; border:1.5px solid ${opt.border}; background:${opt.bg}; color:${opt.color};">${opt.label}</button>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:13px; color:var(--muted); margin-top:6px;">${v.psqiScoreLine}</div>
+
+      <div style="margin-top:22px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <button data-h="${reg(v.submitCheckin)}" style="background:var(--success); color:white; border:none; padding:11px 20px; border-radius:10px; font-size:13.5px; font-weight:600;">Submit check-in</button>
+        ${v.checkinDone ? `<span style="font-size:13px; color:var(--success); font-weight:600;">✓ Submitted — flagged responses notify your care team directly</span>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function render() {
+  H = {}; hid = 0;
+  const v = computeVals();
+  document.getElementById('app').innerHTML = `
+    <div class="app-shell">
+      ${sidebarHTML(v)}
+      <div class="main">
+        ${v.showCardiac ? cardiacHTML(v) : ''}
+        ${v.showInjury ? injuryHTML(v) : ''}
+        ${v.showCare ? careHTML(v) : ''}
+        ${v.showProfile ? profileHTML(v) : ''}
+        ${v.showCheckin ? checkinHTML(v) : ''}
+      </div>
+    </div>
+  `;
+}
+
+document.getElementById('app').addEventListener('click', function (e) {
+  const el = e.target.closest('[data-h]');
+  if (el && H[el.dataset.h]) H[el.dataset.h]();
+});
+
+render();
+</script>
+</body>
+</html>
