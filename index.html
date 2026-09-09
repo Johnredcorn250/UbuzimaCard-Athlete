@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UbuzimaCard Athlete</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 56'%3E%3Crect x='6' y='10' width='52' height='38' rx='8' fill='none' stroke='%236d5a00' stroke-width='3'/%3E%3Cpath d='M10,30 L20,30 L24,18 L30,42 L34,22 L40,30 L54,30' fill='none' stroke='%236d5a00' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231c2731'/%3E%3Cg transform='translate(0,4)'%3E%3Crect x='6' y='10' width='52' height='38' rx='8' fill='none' stroke='%23e5be01' stroke-width='4'/%3E%3Cpath d='M10,30 L20,30 L24,18 L30,42 L34,22 L40,30 L54,30' fill='none' stroke='%23e5be01' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M22,44 Q32,50 42,44' stroke='%237ea0b8' stroke-width='3.2' stroke-linecap='round' fill='none'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   :root{
@@ -69,6 +69,11 @@
     .mobile-navbar .subnav-list{flex-direction:row; overflow-x:auto; -webkit-overflow-scrolling:touch; gap:8px; padding-bottom:2px;}
     .mobile-navbar .subnav-list button{white-space:nowrap; flex-shrink:0; padding:11px 14px !important;}
     .mobile-navbar button{min-height:40px;}
+
+    .roster-row{flex-wrap:wrap; row-gap:8px;}
+    .roster-row .roster-status{margin-left:52px;}
+
+    .sec-status-row{flex-wrap:wrap; row-gap:6px;}
   }
 </style>
 </head>
@@ -147,6 +152,60 @@ const CARE_FACILITIES = [
   { id: 'mental', category: 'Mental health & counseling', color: 'var(--success)', name: 'Sample Mental Health & Counseling Service', service: 'Confidential counseling & follow-up support', location: 'Kigali', contact: '+250 7•• ••• ••• (sample)' }
 ];
 
+// Sample teammates shown in the Coach view's roster, alongside whichever player is active in
+// the Clinician view (that one player's status is live — these are static sample data).
+const STATIC_ROSTER = [
+  { id: 'p2', name: 'Niyonzima Jean', initials: 'NJ', position: 'Shooting guard', jersey: '#4', clearance: 'Referred', rtpStage: 0 },
+  { id: 'p3', name: 'Habimana Patrick', initials: 'HP', position: 'Power forward', jersey: '#11', clearance: 'Restricted', rtpStage: 0 },
+  { id: 'p4', name: 'Mugisha Alain', initials: 'MA', position: 'Small forward', jersey: '#9', clearance: 'Cleared', rtpStage: 2 },
+  { id: 'p5', name: 'Ishimwe Divine', initials: 'ID', position: 'Point guard', jersey: '#3', clearance: 'Cleared', rtpStage: 5 },
+  { id: 'p6', name: 'Nkurunziza Eric', initials: 'NE', position: 'Center', jersey: '#15', clearance: null, rtpStage: 0 },
+  { id: 'p7', name: 'Tuyishime Bertin', initials: 'TB', position: 'Shooting guard', jersey: '#23', clearance: 'Cleared', rtpStage: 5 },
+  { id: 'p8', name: 'Byiringiro Fabrice', initials: 'BF', position: 'Power forward', jersey: '#6', clearance: 'Cleared', rtpStage: 4 },
+  { id: 'p9', name: 'Iradukunda Sam', initials: 'IS', position: 'Small forward', jersey: '#14', clearance: 'Cleared', rtpStage: 5 },
+  { id: 'p10', name: 'Gasana Willy', initials: 'GW', position: 'Center', jersey: '#25', clearance: 'Cleared', rtpStage: 5 }
+];
+
+function getClearanceBadge(clearance) {
+  return clearance === 'Cleared'
+    ? { bg: 'var(--success-soft)', color: 'var(--success)', label: 'Cleared' }
+    : clearance === 'Referred'
+    ? { bg: 'var(--danger-soft)', color: 'var(--danger)', label: 'Referred' }
+    : clearance === 'Restricted'
+    ? { bg: 'var(--accent2-soft)', color: 'var(--accent2-dark)', label: 'Restricted' }
+    : { bg: 'var(--bg)', color: 'var(--muted)', label: 'Pending screening' };
+}
+
+// Static content for the "Data & security" screen — mirrors the architecture reference doc,
+// condensed for an in-app view. Nothing here is interactive, so it's read directly rather than
+// threaded through computeVals().
+const SECURITY_ROLE_ACCESS = [
+  { role: 'Clinician', detail: 'Full clinical record for their own patients' },
+  { role: 'Coach', detail: 'Clearance + return-to-play stage only — never a diagnosis' },
+  { role: 'Athlete', detail: 'Own profile, consent toggles, and transfer' }
+];
+const SECURITY_SPECS = ['AES-256 at rest', 'TLS 1.3 in transit', 'Separate key for check-in data', 'Hosted in Rwanda'];
+const SECURITY_STATUS_ROWS = [
+  { label: 'Role-based access (Clinician / Coach / Athlete)', status: 'Live in prototype', live: true },
+  { label: 'Consent controls & transfer flow', status: 'Live in prototype', live: true },
+  { label: 'Encryption, real login, audit logs', status: 'Designed for MVP build', live: false },
+  { label: 'In-country hosting & encrypted backups', status: 'Designed for MVP build', live: false },
+  { label: 'NCSA / DPO registration', status: 'Scheduled once a pilot club is confirmed', live: false },
+  { label: 'NHIC / e-Ubuzima integration', status: 'Future phase', live: false }
+];
+
+function getCoachStatus(clearance, rtpStage) {
+  return clearance === 'Restricted'
+    ? { bg: 'var(--accent2-soft)', color: 'var(--accent2-dark)', label: 'Not available', detail: 'Restricted by club medical staff — hold out of training and games until reviewed.' }
+    : clearance === 'Referred'
+    ? { bg: 'var(--danger-soft)', color: 'var(--danger)', label: 'Pending review', detail: 'Referred for specialist follow-up — hold out of contact activity until cleared.' }
+    : clearance === 'Cleared' && rtpStage < 5
+    ? { bg: 'var(--accent2-soft)', color: 'var(--accent2-dark)', label: `In progression — stage ${rtpStage + 1} of 6`, detail: `Currently at "${RTP_STAGES[rtpStage]}." Follow this stage's activity limits; medical staff will advance the stage when ready.` }
+    : clearance === 'Cleared' && rtpStage === 5
+    ? { bg: 'var(--success-soft)', color: 'var(--success)', label: 'Full availability', detail: 'Cleared for full training and match play — no activity restrictions on file.' }
+    : { bg: 'var(--bg)', color: 'var(--muted)', label: 'Awaiting screening', detail: 'Pre-participation screening not yet completed by medical staff.' };
+}
+
 let state = {
   playerType: 'rwandan',
   role: 'clinician',
@@ -163,7 +222,9 @@ let state = {
   checkinDone: false,
   consent: { 0: true, 1: true, 2: false, 3: false },
   transferClub: null,
-  transferSent: false
+  transferSent: false,
+  coachSelectedId: null,
+  showSecurity: false
 };
 
 function setState(patch) {
@@ -259,13 +320,31 @@ function computeVals() {
     toggle: () => setState({ consent: { ...s.consent, [i]: !s.consent[i] } })
   }));
 
-  const clearanceBadge = s.clearance === 'Cleared'
-    ? { bg: 'var(--success-soft)', color: 'var(--success)', label: 'Cleared' }
-    : s.clearance === 'Referred'
-    ? { bg: 'var(--danger-soft)', color: 'var(--danger)', label: 'Referred' }
-    : s.clearance === 'Restricted'
-    ? { bg: 'var(--accent2-soft)', color: 'var(--accent2-dark)', label: 'Restricted' }
-    : { bg: 'var(--bg)', color: 'var(--muted)', label: 'Pending screening' };
+  const clearanceBadge = getClearanceBadge(s.clearance);
+
+  const activeRosterEntry = {
+    id: 'active', name: player.name, initials: player.initials, position: player.position, jersey: player.jersey,
+    clearance: s.clearance, rtpStage: s.rtpStage, linked: true
+  };
+  const fullRoster = [activeRosterEntry, ...STATIC_ROSTER];
+
+  const coachRosterItems = fullRoster.map((p) => {
+    const st = getCoachStatus(p.clearance, p.rtpStage);
+    return { ...p, statusBg: st.bg, statusColor: st.color, statusLabel: st.label, statusDetail: st.detail, select: () => setState({ coachSelectedId: p.id }) };
+  });
+
+  const coachSelectedPlayer = (() => {
+    const found = fullRoster.find((p) => p.id === s.coachSelectedId);
+    if (!found) return null;
+    const st = getCoachStatus(found.clearance, found.rtpStage);
+    const cb = getClearanceBadge(found.clearance);
+    return {
+      ...found,
+      statusBg: st.bg, statusColor: st.color, statusLabel: st.label, statusDetail: st.detail,
+      cardiacBadgeBg: cb.bg, cardiacBadgeColor: cb.color, cardiacBadgeLabel: cb.label,
+      rtpDots: RTP_STAGES.map((label, i) => ({ label, num: i + 1, filled: found.clearance === 'Cleared' && i <= found.rtpStage }))
+    };
+  })();
 
   const btnStyle = (active) => `flex-shrink:0; font-size:10.5px; font-weight:600; padding:6px 8px; border-radius:7px; border:1.5px solid ${active ? 'var(--accent2)' : 'var(--sborder)'}; background:${active ? 'var(--accent2-soft)' : 'transparent'}; color:${active ? 'var(--accent2)' : 'var(--smuted)'};`;
   const navBtn = (active, tabColor) => `text-align:left; padding:10px 12px; border:none; border-radius:9px; font-size:13.5px; font-weight:600; background:${active ? tabColor + '26' : 'transparent'}; color:${active ? tabColor : 'var(--stext)'};`;
@@ -273,11 +352,24 @@ function computeVals() {
 
   return {
     isClinician: s.role === 'clinician',
+    isCoach: s.role === 'coach',
     isAthlete: s.role === 'athlete',
-    setClinician: () => setState({ role: 'clinician' }),
-    setAthlete: () => setState({ role: 'athlete' }),
+    setClinician: () => setState({ role: 'clinician', showSecurity: false }),
+    setCoach: () => setState({ role: 'coach', coachSelectedId: null, showSecurity: false }),
+    setAthlete: () => setState({ role: 'athlete', showSecurity: false }),
     clinicianRoleBtnStyle: roleBtn(s.role === 'clinician'),
+    coachRoleBtnStyle: roleBtn(s.role === 'coach'),
     athleteRoleBtnStyle: roleBtn(s.role === 'athlete'),
+
+    showCoachRoster: s.role === 'coach' && !s.coachSelectedId,
+    showCoachDetail: s.role === 'coach' && !!s.coachSelectedId,
+    coachRosterItems,
+    coachSelectedPlayer,
+    backToRoster: () => setState({ coachSelectedId: null }),
+
+    showSecurity: s.showSecurity,
+    setSecurity: () => setState({ showSecurity: true }),
+    exitSecurity: () => setState({ showSecurity: false }),
 
     showCardiac: s.role === 'clinician' && s.clinicianTab === 'cardiac',
     showInjury: s.role === 'clinician' && s.clinicianTab === 'injury',
@@ -369,10 +461,18 @@ function navControlsHTML(v) {
       <div>
         <div class="mono-label" style="font-size:10px; color:var(--smuted); margin-bottom:8px;">Viewing as</div>
         <div style="display:flex; background:var(--sbg); border:1px solid var(--sborder); border-radius:10px; padding:3px; gap:3px;">
-          <button data-h="${reg(v.setClinician)}" style="${v.clinicianRoleBtnStyle} flex:1; padding:8px 0; border:none; border-radius:8px; font-size:13px; font-weight:600;">Clinician</button>
-          <button data-h="${reg(v.setAthlete)}" style="${v.athleteRoleBtnStyle} flex:1; padding:8px 0; border:none; border-radius:8px; font-size:13px; font-weight:600;">Athlete</button>
+          <button data-h="${reg(v.setClinician)}" style="${v.clinicianRoleBtnStyle} flex:1; padding:8px 0; border:none; border-radius:8px; font-size:12.5px; font-weight:600;">Clinician</button>
+          <button data-h="${reg(v.setCoach)}" style="${v.coachRoleBtnStyle} flex:1; padding:8px 0; border:none; border-radius:8px; font-size:12.5px; font-weight:600;">Coach</button>
+          <button data-h="${reg(v.setAthlete)}" style="${v.athleteRoleBtnStyle} flex:1; padding:8px 0; border:none; border-radius:8px; font-size:12.5px; font-weight:600;">Athlete</button>
         </div>
       </div>
+
+      <button data-h="${reg(v.setSecurity)}" style="text-align:left; padding:10px 12px; border:1px solid var(--sborder); border-radius:9px; font-size:12.5px; font-weight:600; background:${v.showSecurity ? 'var(--ssurface)' : 'transparent'}; color:var(--stext);">Data &amp; security</button>
+
+      ${v.isCoach ? `
+      <div style="font-size:11.5px; color:var(--smuted); line-height:1.45; background:var(--ssurface); border:1px solid var(--sborder); border-radius:10px; padding:10px 12px;">
+        Coaches see availability status only. Full clinical detail stays with medical staff and the athlete.
+      </div>` : ''}
 
       ${v.isClinician ? `
       <div class="subnav-list">
@@ -537,6 +637,111 @@ function injuryHTML(v) {
   `;
 }
 
+function coachRosterHTML(v) {
+  return `
+    <h1 style="font-size:24px;">Team roster</h1>
+    <div style="width:44px; height:4px; background:var(--saccent); border-radius:2px; margin-top:12px;"></div>
+    <p style="color:var(--muted); font-size:14px; margin-top:14px;">${v.coachRosterItems.length} players &middot; availability status only &middot; tap a player for their clearance and return-to-play detail</p>
+
+    <div style="display:flex; flex-direction:column; gap:10px; margin-top:22px;">
+      ${v.coachRosterItems.map((p) => `
+        <button data-h="${reg(p.select)}" class="roster-row" style="display:flex; align-items:center; justify-content:space-between; gap:16px; text-align:left; width:100%; background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px 18px;">
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+            <div style="width:40px; height:40px; border-radius:50%; background:var(--accent-soft); color:var(--accent-dark); display:flex; align-items:center; justify-content:center; font-weight:600; font-size:14px; flex-shrink:0;">${p.initials}</div>
+            <div style="min-width:0;">
+              <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.name}${p.linked ? ' <span title="Synced live with the Clinician view" style="color:var(--accent-dark); font-size:11px;">&#9679;</span>' : ''}</div>
+              <div style="font-size:12px; color:var(--muted); margin-top:1px;">${p.position} &middot; ${p.jersey}</div>
+            </div>
+          </div>
+          <span class="roster-status" style="flex-shrink:0; font-size:12px; font-weight:600; padding:5px 11px; border-radius:20px; background:${p.statusBg}; color:${p.statusColor}; white-space:nowrap;">${p.statusLabel}</span>
+        </button>
+      `).join('')}
+    </div>
+
+    <p style="color:var(--muted); font-size:12.5px; margin-top:20px; line-height:1.5;">Sample roster for demonstration. The player marked &#9679; is whichever player is currently active in the Clinician view, so its status updates live — the rest is sample data standing in for the full squad.</p>
+  `;
+}
+
+function coachDetailHTML(v) {
+  const p = v.coachSelectedPlayer;
+  return `
+    <button data-h="${reg(v.backToRoster)}" style="display:flex; align-items:center; gap:6px; background:none; border:none; padding:0; margin-bottom:18px; color:var(--accent-dark); font-size:13px; font-weight:600;">&larr; Back to roster</button>
+
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div style="width:52px; height:52px; border-radius:50%; background:var(--accent-soft); color:var(--accent-dark); display:flex; align-items:center; justify-content:center; font-weight:600; font-size:17px; flex-shrink:0;">${p.initials}</div>
+      <div>
+        <h1 style="font-size:22px;">${p.name}</h1>
+        <div style="font-size:13px; color:var(--muted); margin-top:2px;">${p.position} &middot; ${p.jersey}${p.linked ? ' &middot; <span style="color:var(--accent-dark); font-weight:600;">synced with Clinician view</span>' : ''}</div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--saccent); border-radius:16px; padding:24px; margin-top:22px;">
+      <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Current status</div>
+      <span style="font-size:15px; font-weight:600; padding:7px 14px; border-radius:20px; background:${p.statusBg}; color:${p.statusColor};">${p.statusLabel}</span>
+      <p style="font-size:13.5px; color:var(--text); margin-top:14px; line-height:1.5;">${p.statusDetail}</p>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px;">
+      <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:18px;">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Cardiac pre-participation screen</div>
+        <span style="font-size:13px; font-weight:600; padding:5px 11px; border-radius:20px; background:${p.cardiacBadgeBg}; color:${p.cardiacBadgeColor};">${p.cardiacBadgeLabel}</span>
+      </div>
+      <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:18px;">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">Return-to-play progression</div>
+        <div style="display:flex; gap:4px;">
+          ${p.rtpDots.map((d) => `<span title="${d.num}. ${d.label}" style="flex:1; height:8px; border-radius:4px; background:${d.filled ? 'var(--accent2-dark)' : 'var(--border)'};"></span>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:18px 20px; margin-top:20px;">
+      <p style="font-size:12.5px; color:var(--muted); line-height:1.55; margin:0;">Coaches don't see the underlying cardiac questionnaire, concussion assessment scores, diagnoses, or the athlete's recovery check-in — only the clearance and return-to-play status needed to make training and selection decisions safely. This split follows standard sports-medicine confidentiality practice and is governed by the same consent settings the athlete controls in their profile.</p>
+    </div>
+  `;
+}
+
+function securityHTML(v) {
+  return `
+    <button data-h="${reg(v.exitSecurity)}" style="display:flex; align-items:center; gap:6px; background:none; border:none; padding:0; margin-bottom:18px; color:var(--accent-dark); font-size:13px; font-weight:600;">&larr; Back</button>
+
+    <h1 style="font-size:24px;">Data &amp; security</h1>
+    <div style="width:44px; height:4px; background:var(--accent); border-radius:2px; margin-top:12px;"></div>
+    <p style="color:var(--muted); font-size:14px; margin-top:14px; max-width:640px;">How health data moves through UbuzimaCard Athlete — who can see what, how it's protected, and who's accountable for it. This mirrors the architecture we walk partners through.</p>
+
+    <div style="font-size:13px; font-weight:600; margin-top:26px; margin-bottom:10px;">Who sees what</div>
+    <div class="grid-2">
+      ${SECURITY_ROLE_ACCESS.map((r) => `
+        <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px 18px;">
+          <div style="font-size:13.5px; font-weight:600;">${r.role}</div>
+          <div style="font-size:12.5px; color:var(--muted); margin-top:5px; line-height:1.45;">${r.detail}</div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div style="font-size:13px; font-weight:600; margin-top:24px; margin-bottom:10px;">How it's protected</div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+      ${SECURITY_SPECS.map((spec) => `<span style="font-size:12.5px; font-weight:600; padding:7px 13px; border-radius:20px; background:var(--accent-soft); color:var(--accent-dark);">${spec}</span>`).join('')}
+    </div>
+
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:18px 20px; margin-top:22px;">
+      <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Governance</div>
+      <p style="font-size:13px; color:var(--text); line-height:1.55; margin:0;">The club or federation is the <strong>data controller</strong>; UbuzimaCard Athlete acts as the <strong>data processor</strong> under a signed Data Processing Agreement — the same model used by Kitman Labs, Smartabase, and Catapult Sports. Before any real athlete data goes live, we register with Rwanda's National Cyber Security Authority Data Protection Office, as required under Law N&deg; 058/2021.</p>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; margin-top:24px; margin-bottom:10px;">Built today vs. designed for the build</div>
+    <div style="display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;">
+      ${SECURITY_STATUS_ROWS.map((row) => `
+        <div class="sec-status-row" style="display:flex; align-items:center; justify-content:space-between; gap:16px; background:#fff; padding:12px 18px;">
+          <span style="font-size:13px; color:var(--text);">${row.label}</span>
+          <span style="flex-shrink:0; font-size:11.5px; font-weight:600; padding:4px 10px; border-radius:20px; white-space:nowrap; background:${row.live ? 'var(--success-soft)' : 'var(--accent2-soft)'}; color:${row.live ? 'var(--success)' : 'var(--accent2-dark)'};">${row.status}</span>
+        </div>
+      `).join('')}
+    </div>
+
+    <p style="color:var(--muted); font-size:12.5px; margin-top:20px; line-height:1.5;">This screen mirrors the full architecture document we bring to partner meetings — encryption, hosting, and governance detail included there stays out of this clickable prototype by design, since a coach or athlete never needs to see it.</p>
+  `;
+}
+
 function careHTML(v) {
   return `
     <h1 style="font-size:24px;">Care network</h1>
@@ -688,11 +893,15 @@ function render() {
     <div class="app-shell">
       ${sidebarHTML(v)}
       <div class="main">
+        ${v.showSecurity ? securityHTML(v) : `
         ${v.showCardiac ? cardiacHTML(v) : ''}
         ${v.showInjury ? injuryHTML(v) : ''}
+        ${v.showCoachRoster ? coachRosterHTML(v) : ''}
+        ${v.showCoachDetail ? coachDetailHTML(v) : ''}
         ${v.showCare ? careHTML(v) : ''}
         ${v.showProfile ? profileHTML(v) : ''}
         ${v.showCheckin ? checkinHTML(v) : ''}
+        `}
       </div>
     </div>
   `;
