@@ -1,4 +1,4 @@
-<!doctype html>
+=<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -81,7 +81,20 @@
     .roster-row .roster-status{margin-left:52px;}
 
     .sec-status-row{flex-wrap:wrap; row-gap:6px;}
+
+    .kiosk-body{padding:24px 16px 48px !important;}
   }
+
+  .kiosk-shell{min-height:100vh; background:var(--bg); display:flex; flex-direction:column;}
+  .kiosk-header{display:flex; align-items:center; justify-content:space-between; padding:16px 24px; background:var(--sbg); color:var(--stext);}
+  .kiosk-brand{font-family:'Unbounded',sans-serif; font-weight:600; font-size:14px;}
+  .kiosk-exit{background:none; border:1px solid var(--sborder); color:var(--smuted); font-size:11.5px; padding:7px 13px; border-radius:8px;}
+  .kiosk-body{flex:1; padding:32px 24px 60px; max-width:720px; margin:0 auto; width:100%;}
+  .kiosk-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:14px; margin-top:22px;}
+  .kiosk-tile{display:flex; flex-direction:column; align-items:center; gap:10px; background:#fff; border:1px solid var(--border); border-radius:16px; padding:22px 12px; min-height:120px; justify-content:center;}
+  .kiosk-avatar{width:52px; height:52px; border-radius:50%; background:var(--accent-soft); color:var(--accent-dark); display:flex; align-items:center; justify-content:center; font-weight:600; font-size:16px; flex-shrink:0;}
+  .kiosk-name{font-size:13px; font-weight:600; text-align:center; line-height:1.3;}
+  .kiosk-thanks{text-align:center; background:#fff; border:1px solid var(--border); border-radius:16px; padding:48px 24px; margin-top:24px;}
 </style>
 </head>
 <body>
@@ -189,12 +202,15 @@ function getClearanceBadge(clearance) {
 const SECURITY_ROLE_ACCESS = [
   { role: 'Clinician', detail: 'Full clinical record for their own patients' },
   { role: 'Coach', detail: 'Clearance + return-to-play stage only — never a diagnosis' },
-  { role: 'Athlete', detail: 'Own profile, consent toggles, and transfer' }
+  { role: 'Athlete', detail: 'Own profile, consent toggles, and transfer' },
+  { role: 'Club Admin', detail: 'Roster, staff accounts, and eligibility status — never clinical detail' }
 ];
 const SECURITY_SPECS = ['AES-256 at rest', 'TLS 1.3 in transit', 'Separate key for check-in data', 'Hosted in Rwanda'];
 const SECURITY_STATUS_ROWS = [
-  { label: 'Role-based access (Clinician / Coach / Athlete)', status: 'Live in prototype', live: true },
+  { label: 'Role-based access (Clinician / Coach / Athlete / Club Admin)', status: 'Live in prototype', live: true },
   { label: 'Consent controls & transfer flow', status: 'Live in prototype', live: true },
+  { label: 'Roster, staff & season administration', status: 'Live in prototype', live: true },
+  { label: 'Kiosk-mode PIN lock', status: 'Designed for MVP build', live: false },
   { label: 'Encryption, real login, audit logs', status: 'Designed for MVP build', live: false },
   { label: 'In-country hosting & encrypted backups', status: 'Designed for MVP build', live: false },
   { label: 'NCSA / DPO registration', status: 'Scheduled once a pilot club is confirmed', live: false },
@@ -231,7 +247,15 @@ let state = {
   transferClub: null,
   transferSent: false,
   coachSelectedId: null,
-  showSecurity: false
+  showSecurity: false,
+  triageHead: null, triageOther: null, triageOverride: false,
+  kioskMode: false, kioskSelectedId: null,
+  adminRoster: STATIC_ROSTER.map((p) => ({ ...p, physicianOfRecord: 'Dr. sample, team physician', insurance: 'Active', eligibility: 'Registered' })),
+  adminStaff: [
+    { id: 's1', name: 'Dr. sample, team physician', roleLabel: 'Team physician — Clinician access' },
+    { id: 's2', name: 'Coach sample', roleLabel: 'Head coach — Coach access' }
+  ],
+  seasonArchived: false
 };
 
 function setState(patch) {
@@ -357,16 +381,65 @@ function computeVals() {
   const navBtn = (active, tabColor) => `text-align:left; padding:10px 12px; border:none; border-radius:9px; font-size:13.5px; font-weight:600; background:${active ? tabColor + '26' : 'transparent'}; color:${active ? tabColor : 'var(--stext)'};`;
   const roleBtn = (active) => `background:${active ? 'var(--ssurface)' : 'transparent'}; box-shadow:${active ? '0 1px 3px rgba(0,0,0,0.3)' : 'none'}; color:${active ? 'var(--stext)' : 'var(--smuted)'};`;
 
+  // Triage (two-tier quick screen ahead of the full injury/concussion assessment)
+  const triageYN = (key) => {
+    const val = s[key];
+    const mk = (label, boolVal) => {
+      const active = val === boolVal;
+      const activeColor = boolVal ? 'var(--danger)' : 'var(--success)';
+      const activeBg = boolVal ? 'var(--danger-soft)' : 'var(--success-soft)';
+      return {
+        label,
+        border: active ? activeColor : 'var(--border)',
+        bg: active ? activeBg : '#fff',
+        color: active ? activeColor : 'var(--text)',
+        pick: () => setState({ [key]: boolVal })
+      };
+    };
+    return [mk('Yes', true), mk('No', false)];
+  };
+  const quickScreenAnswered = s.triageHead !== null && s.triageOther !== null;
+  const quickScreenFlagged = s.triageHead === true || s.triageOther === true;
+  const showFullAssessment = s.triageOverride || quickScreenFlagged;
+  const showScreenedClear = !showFullAssessment && quickScreenAnswered;
+  const showQuickScreen = !showFullAssessment && !showScreenedClear;
+
+  // Kiosk mode — shared-tablet check-in with an auto lockback to the roster
+  const kioskRosterItems = fullRoster.map((p) => ({
+    ...p,
+    selectKiosk: () => setState({ kioskSelectedId: p.id, phq9: Array(9).fill(null), psqi: Array(7).fill(null), checkinDone: false })
+  }));
+  const kioskSelectedPlayer = fullRoster.find((p) => p.id === s.kioskSelectedId) || null;
+  const kioskReset = () => setState({ kioskSelectedId: null, phq9: Array(9).fill(null), psqi: Array(7).fill(null), checkinDone: false });
+
+  // Club Admin — roster, staff & eligibility administration; never clinical content
+  const activeAdminEntry = {
+    id: 'active', name: player.name, position: player.position, jersey: player.jersey,
+    physicianOfRecord: 'Dr. sample, team physician', insurance: 'Active', eligibility: 'Registered', isActive: true
+  };
+  const adminRosterItems = [activeAdminEntry, ...s.adminRoster].map((p) => ({
+    ...p,
+    remove: p.isActive ? null : () => setState({ adminRoster: s.adminRoster.filter((x) => x.id !== p.id) })
+  }));
+  const adminStaffItems = s.adminStaff.map((st) => ({
+    ...st,
+    remove: () => setState({ adminStaff: s.adminStaff.filter((x) => x.id !== st.id) })
+  }));
+
   return {
     isClinician: s.role === 'clinician',
     isCoach: s.role === 'coach',
     isAthlete: s.role === 'athlete',
+    isAdmin: s.role === 'admin',
     setClinician: () => setState({ role: 'clinician', showSecurity: false }),
     setCoach: () => setState({ role: 'coach', coachSelectedId: null, showSecurity: false }),
     setAthlete: () => setState({ role: 'athlete', showSecurity: false }),
+    setAdmin: () => setState({ role: 'admin', showSecurity: false }),
     clinicianRoleBtnStyle: roleBtn(s.role === 'clinician'),
     coachRoleBtnStyle: roleBtn(s.role === 'coach'),
     athleteRoleBtnStyle: roleBtn(s.role === 'athlete'),
+    adminRoleBtnStyle: roleBtn(s.role === 'admin'),
+    showAdmin: s.role === 'admin',
 
     showCoachRoster: s.role === 'coach' && !s.coachSelectedId,
     showCoachDetail: s.role === 'coach' && !!s.coachSelectedId,
@@ -428,6 +501,12 @@ function computeVals() {
     balanceDec: () => setState({ balanceErrors: Math.max(0, s.balanceErrors - 1) }),
     rtpStages,
 
+    triageHeadOptions: triageYN('triageHead'),
+    triageOtherOptions: triageYN('triageOther'),
+    showQuickScreen, showScreenedClear, showFullAssessment,
+    openFullAssessmentAnyway: () => setState({ triageOverride: true }),
+    resetTriage: () => setState({ triageHead: null, triageOther: null, triageOverride: false }),
+
     cardiacBadgeBg: clearanceBadge.bg, cardiacBadgeColor: clearanceBadge.color, cardiacBadgeLabel: clearanceBadge.label,
     athleteRtpLabel: `${s.rtpStage + 1}. ${RTP_STAGES[s.rtpStage]}`,
 
@@ -458,7 +537,25 @@ function computeVals() {
         reqColor: requested ? 'var(--success)' : 'var(--text)',
         request: () => setState({ careRequests: { ...s.careRequests, [f.id]: true } })
       };
-    })
+    }),
+
+    kioskMode: s.kioskMode,
+    enterKiosk: () => setState({ kioskMode: true, kioskSelectedId: null, phq9: Array(9).fill(null), psqi: Array(7).fill(null), checkinDone: false }),
+    exitKiosk: () => setState({ kioskMode: false, kioskSelectedId: null, phq9: Array(9).fill(null), psqi: Array(7).fill(null), checkinDone: false }),
+    kioskRosterItems,
+    kioskSelectedId: s.kioskSelectedId,
+    kioskSelectedPlayer,
+    kioskReset,
+    kioskSubmit: () => { setState({ checkinDone: true }); setTimeout(kioskReset, 4000); },
+
+    adminRosterItems,
+    adminAddPlayer: () => setState({ adminRoster: [...s.adminRoster, { id: 'new' + Date.now(), name: `New player ${s.adminRoster.length + 1}`, position: 'Unassigned', jersey: '#--', physicianOfRecord: 'Unassigned', insurance: 'Pending', eligibility: 'Pending registration' }] }),
+    adminStaffItems,
+    adminAddStaff: () => setState({ adminStaff: [...s.adminStaff, { id: 'staff' + Date.now(), name: `New staff account ${s.adminStaff.length + 1}`, roleLabel: 'Unassigned role' }] }),
+    seasonArchived: s.seasonArchived,
+    seasonLabel: s.seasonArchived ? 'Start new season' : 'Archive & roll over season',
+    seasonStatusText: s.seasonArchived ? 'Season archived — roster carried forward. Ready to set up the next season.' : 'Current season active.',
+    adminToggleSeason: () => setState({ seasonArchived: !s.seasonArchived })
   };
 }
 
@@ -467,14 +564,22 @@ function navControlsHTML(v) {
     <div class="nav-controls">
       <div>
         <div class="mono-label" style="font-size:10px; color:var(--smuted); margin-bottom:8px;">Viewing as</div>
-        <div style="display:flex; background:var(--sbg); border:1px solid var(--sborder); border-radius:10px; padding:3px; gap:3px;">
-          <button data-h="${reg(v.setClinician)}" style="${v.clinicianRoleBtnStyle} flex:1; padding:8px 0; border:none; border-radius:8px; font-size:12.5px; font-weight:600;">Clinician</button>
-          <button data-h="${reg(v.setCoach)}" style="${v.coachRoleBtnStyle} flex:1; padding:8px 0; border:none; border-radius:8px; font-size:12.5px; font-weight:600;">Coach</button>
-          <button data-h="${reg(v.setAthlete)}" style="${v.athleteRoleBtnStyle} flex:1; padding:8px 0; border:none; border-radius:8px; font-size:12.5px; font-weight:600;">Athlete</button>
+        <div style="display:grid; grid-template-columns:1fr 1fr; background:var(--sbg); border:1px solid var(--sborder); border-radius:10px; padding:3px; gap:3px;">
+          <button data-h="${reg(v.setClinician)}" style="${v.clinicianRoleBtnStyle} padding:8px 0; border:none; border-radius:8px; font-size:12.5px; font-weight:600;">Clinician</button>
+          <button data-h="${reg(v.setCoach)}" style="${v.coachRoleBtnStyle} padding:8px 0; border:none; border-radius:8px; font-size:12.5px; font-weight:600;">Coach</button>
+          <button data-h="${reg(v.setAthlete)}" style="${v.athleteRoleBtnStyle} padding:8px 0; border:none; border-radius:8px; font-size:12.5px; font-weight:600;">Athlete</button>
+          <button data-h="${reg(v.setAdmin)}" style="${v.adminRoleBtnStyle} padding:8px 0; border:none; border-radius:8px; font-size:12.5px; font-weight:600;">Club Admin</button>
         </div>
       </div>
 
       <button data-h="${reg(v.setSecurity)}" style="text-align:left; padding:10px 12px; border:1px solid var(--sborder); border-radius:9px; font-size:12.5px; font-weight:600; background:${v.showSecurity ? 'var(--ssurface)' : 'transparent'}; color:var(--stext);">Data &amp; security</button>
+
+      <button data-h="${reg(v.enterKiosk)}" style="text-align:left; padding:10px 12px; border:1px solid var(--sborder); border-radius:9px; font-size:12.5px; font-weight:600; background:transparent; color:var(--stext);">Kiosk mode</button>
+
+      ${v.isAdmin ? `
+      <div style="font-size:11.5px; color:var(--smuted); line-height:1.45; background:var(--ssurface); border:1px solid var(--sborder); border-radius:10px; padding:10px 12px;">
+        Club Admin sees roster, staff, and eligibility only — no clinical content.
+      </div>` : ''}
 
       ${v.isCoach ? `
       <div style="font-size:11.5px; color:var(--smuted); line-height:1.45; background:var(--ssurface); border:1px solid var(--sborder); border-radius:10px; padding:10px 12px;">
@@ -592,8 +697,60 @@ function injuryHTML(v) {
       `).join('')}
     </div>
 
-    <h3 class="mono-label" style="font-family:'IBM Plex Mono',monospace; font-weight:400; font-size:11px; color:var(--muted); margin-top:28px; margin-bottom:10px;">New assessment</h3>
+    ${v.showQuickScreen ? quickScreenHTML(v) : ''}
+    ${v.showScreenedClear ? screenedClearHTML(v) : ''}
+    ${v.showFullAssessment ? fullAssessmentHTML(v) : ''}
+  `;
+}
+
+function quickScreenHTML(v) {
+  return `
+    <h3 class="mono-label" style="font-family:'IBM Plex Mono',monospace; font-weight:400; font-size:11px; color:var(--muted); margin-top:28px; margin-bottom:10px;">Quick screen</h3>
     <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--accent2); border-radius:14px; padding:20px;">
+      <p style="font-size:12.5px; color:var(--muted); margin:0 0 16px;">Two questions, under 30 seconds. A "yes" to either opens the full assessment — otherwise the player is screened clear.</p>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-size:13.5px; font-weight:600; margin-bottom:8px;">Any known or suspected blow to the head?</div>
+        <div style="display:flex; gap:6px;">
+          ${v.triageHeadOptions.map((opt) => `<button data-h="${reg(opt.pick)}" style="padding:9px 20px; border-radius:9px; font-size:13px; font-weight:600; border:1.5px solid ${opt.border}; background:${opt.bg}; color:${opt.color};">${opt.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:13.5px; font-weight:600; margin-bottom:8px;">Any other injury needing assessment right now?</div>
+        <div style="display:flex; gap:6px;">
+          ${v.triageOtherOptions.map((opt) => `<button data-h="${reg(opt.pick)}" style="padding:9px 20px; border-radius:9px; font-size:13px; font-weight:600; border:1.5px solid ${opt.border}; background:${opt.bg}; color:${opt.color};">${opt.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <button data-h="${reg(v.openFullAssessmentAnyway)}" style="background:none; border:none; padding:0; margin-top:18px; color:var(--accent2-dark); font-size:12.5px; font-weight:600;">Skip — open full assessment</button>
+    </div>
+  `;
+}
+
+function screenedClearHTML(v) {
+  return `
+    <div style="background:var(--success-soft); border:1px solid var(--success); border-radius:14px; padding:20px; margin-top:28px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="width:22px; height:22px; border-radius:50%; background:var(--success); color:#fff; flex-shrink:0; display:flex; align-items:center; justify-content:center;">${checkSvg()}</span>
+        <div style="font-size:14px; font-weight:600; color:var(--success);">Screened clear</div>
+      </div>
+      <p style="font-size:12.5px; color:var(--text); margin:10px 0 16px; line-height:1.5;">No red flags on the quick screen — no known blow to the head, no other injury needing assessment right now.</p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button data-h="${reg(v.openFullAssessmentAnyway)}" style="background:#fff; border:1.5px solid var(--success); color:var(--success); padding:9px 16px; border-radius:9px; font-size:12.5px; font-weight:600;">Open full assessment anyway</button>
+        <button data-h="${reg(v.resetTriage)}" style="background:none; border:1.5px solid var(--border); color:var(--text); padding:9px 16px; border-radius:9px; font-size:12.5px; font-weight:600;">New quick screen</button>
+      </div>
+    </div>
+  `;
+}
+
+function fullAssessmentHTML(v) {
+  return `
+    <div style="margin-top:28px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+      <h3 class="mono-label" style="font-family:'IBM Plex Mono',monospace; font-weight:400; font-size:11px; color:var(--muted); margin:0;">Full assessment</h3>
+      <button data-h="${reg(v.resetTriage)}" style="background:none; border:none; padding:0; color:var(--accent2-dark); font-size:12px; font-weight:600;">&#8630; New quick screen for this player</button>
+    </div>
+    <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--accent2); border-radius:14px; padding:20px; margin-top:10px;">
       <div style="font-size:13px; font-weight:600; margin-bottom:10px;">Red flags observed</div>
       <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:2px; margin-bottom:20px;">
         ${checklistHTML(v.redFlagItems)}
@@ -892,9 +1049,145 @@ function checkinHTML(v) {
   `;
 }
 
+function kioskAppHTML(v) {
+  return `
+    <div class="kiosk-shell">
+      <div class="kiosk-header">
+        <div class="kiosk-brand">UbuzimaCard Athlete &middot; Kiosk</div>
+        <button data-h="${reg(v.exitKiosk)}" class="kiosk-exit">Exit kiosk mode</button>
+      </div>
+      <div class="kiosk-body">
+        ${v.kioskSelectedId ? kioskCheckinHTML(v) : kioskRosterHTML(v)}
+      </div>
+    </div>
+  `;
+}
+
+function kioskRosterHTML(v) {
+  return `
+    <h1 style="font-size:22px; margin:0;">Who's checking in?</h1>
+    <p style="color:var(--muted); font-size:13.5px; margin-top:8px;">Tap your name to start your recovery check-in.</p>
+    <div class="kiosk-grid">
+      ${v.kioskRosterItems.map((p) => `
+        <button data-h="${reg(p.selectKiosk)}" class="kiosk-tile">
+          <span class="kiosk-avatar">${p.initials || (p.name || '').split(' ').map((w) => w[0]).join('').slice(0, 2)}</span>
+          <span class="kiosk-name">${p.name}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function kioskCheckinHTML(v) {
+  if (v.checkinDone) {
+    return `
+      <div class="kiosk-thanks">
+        <div style="font-size:18px; font-weight:600;">Thanks, ${v.kioskSelectedPlayer ? v.kioskSelectedPlayer.name : ''}!</div>
+        <p style="color:var(--muted); font-size:13px; margin-top:8px;">Flagged responses notify your care team directly. Returning to the roster shortly.</p>
+        <button data-h="${reg(v.kioskReset)}" style="margin-top:18px; background:var(--success); color:#fff; border:none; padding:10px 20px; border-radius:10px; font-size:13px; font-weight:600;">Next player &rarr;</button>
+      </div>
+    `;
+  }
+  return `
+    <button data-h="${reg(v.kioskReset)}" style="display:flex; align-items:center; gap:6px; background:none; border:none; padding:0; margin-bottom:14px; color:var(--accent-dark); font-size:13px; font-weight:600;">&larr; Not you? Back to roster</button>
+
+    <h1 style="font-size:22px; margin:0;">${v.kioskSelectedPlayer ? v.kioskSelectedPlayer.name : 'Recovery check-in'}</h1>
+    <p style="color:var(--muted); font-size:13.5px; margin-top:8px;">Two short sets of questions &middot; about 2 minutes</p>
+
+    <div style="background:#fff; border:1px solid var(--border); border-top:3px solid var(--success); border-radius:16px; padding:22px; margin-top:18px;">
+      <div style="font-size:13px; font-weight:600;">Over the last two weeks</div>
+      <div style="display:flex; flex-direction:column; gap:14px; margin-top:10px;">
+        ${v.phq9Items.map((q) => `
+          <div style="padding-bottom:14px; border-bottom:1px solid var(--border);">
+            <div style="font-size:13.5px; margin-bottom:8px; line-height:1.4;">${q.text}</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              ${q.options.map((opt) => `<button data-h="${reg(opt.pick)}" style="padding:7px 11px; border-radius:8px; font-size:12px; font-weight:500; border:1.5px solid ${opt.border}; background:${opt.bg}; color:${opt.color};">${opt.label}</button>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:13px; color:var(--muted); margin-top:6px;">${v.phq9ScoreLine}</div>
+
+      <div style="margin-top:26px; font-size:13px; font-weight:600;">Sleep quality (PSQI components)</div>
+      <div style="display:flex; flex-direction:column; gap:14px; margin-top:10px;">
+        ${v.psqiItems.map((comp) => `
+          <div style="padding-bottom:14px; border-bottom:1px solid var(--border);">
+            <div style="font-size:13.5px; margin-bottom:8px;">${comp.name}</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              ${comp.options.map((opt) => `<button data-h="${reg(opt.pick)}" style="padding:7px 11px; border-radius:8px; font-size:12px; font-weight:500; border:1.5px solid ${opt.border}; background:${opt.bg}; color:${opt.color};">${opt.label}</button>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:13px; color:var(--muted); margin-top:6px;">${v.psqiScoreLine}</div>
+
+      <div style="margin-top:22px;">
+        <button data-h="${reg(v.kioskSubmit)}" style="background:var(--success); color:white; border:none; padding:11px 20px; border-radius:10px; font-size:13.5px; font-weight:600;">Submit check-in</button>
+      </div>
+    </div>
+  `;
+}
+
+function adminHTML(v) {
+  return `
+    <h1 style="font-size:24px;">Club administration</h1>
+    <div style="width:44px; height:4px; background:var(--accent2); border-radius:2px; margin-top:12px;"></div>
+    <p style="color:var(--muted); font-size:14px; margin-top:14px; max-width:640px;">Roster, staff accounts, and eligibility status — administrative record only. Club Admin never sees clinical detail.</p>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:26px; margin-bottom:10px;">
+      <h3 class="mono-label" style="font-family:'IBM Plex Mono',monospace; font-weight:400; font-size:11px; color:var(--muted); margin:0;">Roster</h3>
+      <button data-h="${reg(v.adminAddPlayer)}" style="background:none; border:1.5px solid var(--border); padding:6px 12px; border-radius:8px; font-size:12px; font-weight:600; color:var(--text);">+ Add player</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      ${v.adminRosterItems.map((p) => `
+        <div style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div style="min-width:160px;">
+            <div style="font-size:13.5px; font-weight:600;">${p.name}${p.isActive ? ' <span style="font-weight:500; color:var(--muted); font-size:11.5px;">(you)</span>' : ''}</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">${p.position || ''} &middot; ${p.jersey || ''}</div>
+          </div>
+          <div style="font-size:12px; color:var(--muted); min-width:170px;">Physician of record: <span style="color:var(--text); font-weight:500;">${p.physicianOfRecord}</span></div>
+          <span style="font-size:11.5px; font-weight:600; padding:5px 11px; border-radius:20px; background:var(--success-soft); color:var(--success); white-space:nowrap;">${p.insurance}</span>
+          <span style="font-size:11.5px; font-weight:600; padding:5px 11px; border-radius:20px; background:var(--accent-soft); color:var(--accent-dark); white-space:nowrap;">${p.eligibility}</span>
+          ${p.remove ? `<button data-h="${reg(p.remove)}" style="background:none; border:none; color:var(--danger); font-size:12px; font-weight:600;">Remove</button>` : ''}
+        </div>
+      `).join('')}
+    </div>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:28px; margin-bottom:10px;">
+      <h3 class="mono-label" style="font-family:'IBM Plex Mono',monospace; font-weight:400; font-size:11px; color:var(--muted); margin:0;">Staff accounts</h3>
+      <button data-h="${reg(v.adminAddStaff)}" style="background:none; border:1.5px solid var(--border); padding:6px 12px; border-radius:8px; font-size:12px; font-weight:600; color:var(--text);">+ Add staff</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      ${v.adminStaffItems.map((st) => `
+        <div style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div>
+            <div style="font-size:13.5px; font-weight:600;">${st.name}</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">${st.roleLabel}</div>
+          </div>
+          <button data-h="${reg(st.remove)}" style="background:none; border:none; color:var(--danger); font-size:12px; font-weight:600;">Remove</button>
+        </div>
+      `).join('')}
+    </div>
+
+    <h3 class="mono-label" style="font-family:'IBM Plex Mono',monospace; font-weight:400; font-size:11px; color:var(--muted); margin-top:28px; margin-bottom:10px;">Season</h3>
+    <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:18px 20px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <p style="font-size:13px; color:var(--text); margin:0; max-width:420px; line-height:1.5;">${v.seasonStatusText}</p>
+      <button data-h="${reg(v.adminToggleSeason)}" style="background:var(--accent2-dark); color:#fff; border:none; padding:10px 18px; border-radius:9px; font-size:12.5px; font-weight:600; white-space:nowrap;">${v.seasonLabel}</button>
+    </div>
+
+    <p style="color:var(--muted); font-size:12.5px; margin-top:20px; line-height:1.5;">Bulk roster import (CSV) and full season-history archiving are designed for the MVP build, not this clickable prototype.</p>
+  `;
+}
+
 function render() {
   H = {}; hid = 0;
   const v = computeVals();
+
+  if (v.kioskMode) {
+    document.getElementById('app').innerHTML = kioskAppHTML(v);
+    return;
+  }
+
   document.getElementById('app').innerHTML = `
     <div class="mobile-navbar">${navControlsHTML(v)}</div>
     <div class="app-shell">
@@ -908,6 +1201,7 @@ function render() {
         ${v.showCare ? careHTML(v) : ''}
         ${v.showProfile ? profileHTML(v) : ''}
         ${v.showCheckin ? checkinHTML(v) : ''}
+        ${v.showAdmin ? adminHTML(v) : ''}
         `}
       </div>
     </div>
